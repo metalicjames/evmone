@@ -72,15 +72,8 @@ namespace
 /// @return  Status code with information which check has failed
 ///          or EVMC_SUCCESS if everything is fine.
 template <evmc_opcode Op>
-inline evmc_status_code check_requirements(
-    const CostTable& cost_table, int64_t& gas_left, ptrdiff_t stack_size) noexcept
+inline evmc_status_code check_requirements(ptrdiff_t stack_size) noexcept
 {
-    auto gas_cost = instr::gas_costs[EVMC_FRONTIER][Op];  // Init assuming const cost.
-    if constexpr (!instr::has_const_gas_cost(Op))
-    {
-        gas_cost = cost_table[Op];  // If not, load the cost from the table.
-    }
-
     // Check stack requirements first. This is order is not required,
     // but it is nicer because complete gas check may need to inspect operands.
     if constexpr (instr::traits[Op].stack_height_change > 0)
@@ -94,9 +87,6 @@ inline evmc_status_code check_requirements(
         if (INTX_UNLIKELY(stack_size < instr::traits[Op].stack_height_required))
             return EVMC_STACK_UNDERFLOW;
     }
-
-    if (INTX_UNLIKELY((gas_left -= gas_cost) < 0))
-        return EVMC_OUT_OF_GAS;
 
     return EVMC_SUCCESS;
 }
@@ -184,12 +174,19 @@ template <evmc_opcode Op>
     }
 
     const auto stack_size = pos.stack_top - stack_bottom;
-    if (const auto status = check_requirements<Op>(cost_table, state.gas_left, stack_size);
+    if (const auto status = check_requirements<Op>(stack_size);
         status != EVMC_SUCCESS)
     {
         state.status = status;
         return {nullptr, pos.stack_top};
     }
+
+    if (INTX_UNLIKELY((state.gas_left -= gas_cost) < 0))
+    {
+        state.status = EVMC_OUT_OF_GAS;
+        return {nullptr, pos.stack_top};
+    }
+
     const auto new_pos = invoke(instr::core::impl<Op>, pos, state);
     const auto new_stack_top = pos.stack_top + instr::traits[Op].stack_height_change;
     return {new_pos, new_stack_top};
