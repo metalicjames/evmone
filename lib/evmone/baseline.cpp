@@ -75,19 +75,10 @@ template <evmc_opcode Op>
 inline evmc_status_code check_requirements(
     const CostTable& cost_table, int64_t& gas_left, ptrdiff_t stack_size) noexcept
 {
-    static_assert(
-        !(instr::has_const_gas_cost(Op) && instr::gas_costs[EVMC_FRONTIER][Op] == instr::undefined),
-        "undefined instructions must not be handled by check_requirements()");
-
     auto gas_cost = instr::gas_costs[EVMC_FRONTIER][Op];  // Init assuming const cost.
     if constexpr (!instr::has_const_gas_cost(Op))
     {
         gas_cost = cost_table[Op];  // If not, load the cost from the table.
-
-        // Negative cost marks an undefined instruction.
-        // This check must be first to produce correct error code.
-        if (INTX_UNLIKELY(gas_cost < 0))
-            return EVMC_UNDEFINED_INSTRUCTION;
     }
 
     // Check stack requirements first. This is order is not required,
@@ -174,6 +165,24 @@ template <evmc_opcode Op>
 [[release_inline]] inline Position invoke(const CostTable& cost_table, const uint256* stack_bottom,
     Position pos, ExecutionState& state) noexcept
 {
+    static_assert(
+        !(instr::has_const_gas_cost(Op) && instr::gas_costs[EVMC_FRONTIER][Op] == instr::undefined),
+        "undefined instructions must not be handled by check_requirements()");
+
+    auto gas_cost = instr::gas_costs[EVMC_FRONTIER][Op];  // Init assuming const cost.
+    if constexpr (!instr::has_const_gas_cost(Op))
+    {
+        gas_cost = cost_table[Op];  // If not, load the cost from the table.
+
+        // Negative cost marks an undefined instruction.
+        // This check must be first to produce correct error code.
+        if (INTX_UNLIKELY(gas_cost < 0))
+        {
+            state.status = EVMC_UNDEFINED_INSTRUCTION;
+            return {nullptr, pos.stack_top};
+        }
+    }
+
     const auto stack_size = pos.stack_top - stack_bottom;
     if (const auto status = check_requirements<Op>(cost_table, state.gas_left, stack_size);
         status != EVMC_SUCCESS)
