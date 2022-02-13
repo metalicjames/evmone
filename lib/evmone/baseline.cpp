@@ -71,25 +71,6 @@ namespace
 /// @param          stack_size  Current stack height.
 /// @return  Status code with information which check has failed
 ///          or EVMC_SUCCESS if everything is fine.
-template <evmc_opcode Op>
-inline evmc_status_code check_requirements(ptrdiff_t stack_size) noexcept
-{
-    // Check stack requirements first. This is order is not required,
-    // but it is nicer because complete gas check may need to inspect operands.
-    if constexpr (instr::traits[Op].stack_height_change > 0)
-    {
-        static_assert(instr::traits[Op].stack_height_change == 1);
-        if (INTX_UNLIKELY(stack_size == Stack::limit))
-            return EVMC_STACK_OVERFLOW;
-    }
-    if constexpr (instr::traits[Op].stack_height_required > 0)
-    {
-        if (INTX_UNLIKELY(stack_size < instr::traits[Op].stack_height_required))
-            return EVMC_STACK_UNDERFLOW;
-    }
-
-    return EVMC_SUCCESS;
-}
 
 
 /// The execution position.
@@ -174,11 +155,24 @@ template <evmc_opcode Op>
     }
 
     const auto stack_size = pos.stack_top - stack_bottom;
-    if (const auto status = check_requirements<Op>(stack_size);
-        status != EVMC_SUCCESS)
+    // Check stack requirements first. This is order is not required,
+    // but it is nicer because complete gas check may need to inspect operands.
+    if constexpr (instr::traits[Op].stack_height_change > 0)
     {
-        state.status = status;
-        return {nullptr, pos.stack_top};
+        static_assert(instr::traits[Op].stack_height_change == 1);
+        if (INTX_UNLIKELY(stack_size == Stack::limit))
+        {
+            state.status = EVMC_STACK_OVERFLOW;
+            return {nullptr, pos.stack_top};
+        }
+    }
+    if constexpr (instr::traits[Op].stack_height_required > 0)
+    {
+        if (INTX_UNLIKELY(stack_size < instr::traits[Op].stack_height_required))
+        {
+            state.status = EVMC_STACK_UNDERFLOW;
+            return {nullptr, pos.stack_top};
+        }
     }
 
     if (INTX_UNLIKELY((state.gas_left -= gas_cost) < 0))
