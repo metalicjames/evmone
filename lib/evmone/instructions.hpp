@@ -779,9 +779,10 @@ inline void msize(StackTop stack, ExecutionState& state) noexcept
     stack.push(state.memory.size());
 }
 
-inline void gas(StackTop stack, ExecutionState& state) noexcept
+inline int64_t gas(StackTop stack, int64_t gas_left, ExecutionState& /*state*/) noexcept
 {
-    stack.push(state.gas_left);
+    stack.push(gas_left);
+    return gas_left;
 }
 
 /// PUSH instruction implementation.
