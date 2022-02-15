@@ -334,24 +334,24 @@ inline void sar(StackTop stack) noexcept
     x = (x >> y) | (sign_mask << mask_shift);
 }
 
-inline evmc_status_code keccak256(StackTop stack, ExecutionState& state) noexcept
+inline int64_t keccak256(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept
 {
     const auto& index = stack.pop();
     auto& size = stack.top();
 
-    if (state.gas_left = check_memory(state, state.gas_left, index, size); state.gas_left < 0)
-        return EVMC_OUT_OF_GAS;
+    if (gas_left = check_memory(state, gas_left, index, size); gas_left < 0)
+        return gas_left;
 
     const auto i = static_cast<size_t>(index);
     const auto s = static_cast<size_t>(size);
     const auto w = num_words(s);
     const auto cost = w * 6;
-    if ((state.gas_left -= cost) < 0)
-        return EVMC_OUT_OF_GAS;
+    if ((gas_left -= cost) < 0)
+        return gas_left;
 
     auto data = s != 0 ? &state.memory[i] : nullptr;
     size = intx::be::load<uint256>(ethash::keccak256(data, s));
-    return EVMC_SUCCESS;
+    return gas_left;
 }
 
 
