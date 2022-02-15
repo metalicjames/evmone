@@ -37,6 +37,15 @@ inline evmc_status_code impl(AdvancedExecutionState& state) noexcept
     return status;
 }
 
+template <evmc_opcode Op,
+    int64_t CoreFn(StackTop, int64_t, ExecutionState&) noexcept = core::impl<Op>>
+inline evmc_status_code impl(AdvancedExecutionState& state) noexcept
+{
+    state.gas_left = CoreFn(state.stack.top_item, state.gas_left, state);
+    state.stack.top_item += instr::traits[Op].stack_height_change;
+    return state.gas_left < 0 ? EVMC_OUT_OF_GAS : EVMC_SUCCESS;
+}
+
 template <evmc_opcode Op, StopToken CoreFn() noexcept = core::impl<Op>>
 inline StopToken impl(AdvancedExecutionState& /*state*/) noexcept
 {

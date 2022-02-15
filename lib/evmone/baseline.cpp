@@ -153,6 +153,18 @@ struct Position
     return pos.code_it + 1;
 }
 
+[[release_inline]] inline code_iterator invoke(
+    int64_t (*instr_fn)(StackTop, int64_t, ExecutionState&) noexcept, Position pos,
+    ExecutionState& state) noexcept
+{
+    if (state.gas_left = instr_fn(pos.stack_top, state.gas_left, state); state.gas_left < 0)
+    {
+        state.status = EVMC_OUT_OF_GAS;
+        return nullptr;
+    }
+    return pos.code_it + 1;
+}
+
 [[release_inline]] inline code_iterator invoke(void (*instr_fn)(StackTop, ExecutionState&) noexcept,
     Position pos, ExecutionState& state) noexcept
 {
