@@ -694,13 +694,13 @@ inline int64_t sload(StackTop stack, int64_t gas_left, ExecutionState& state) no
     return gas_left;
 }
 
-inline evmc_status_code sstore(StackTop stack, ExecutionState& state) noexcept
+inline int64_t sstore(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept
 {
     if (state.msg->flags & EVMC_STATIC)
-        return EVMC_STATIC_MODE_VIOLATION;
+        return -1;  // FIXME
 
-    if (state.rev >= EVMC_ISTANBUL && state.gas_left <= 2300)
-        return EVMC_OUT_OF_GAS;
+    if (state.rev >= EVMC_ISTANBUL && gas_left <= 2300)
+        return -1;
 
     const auto key = intx::be::store<evmc::bytes32>(stack.pop());
     const auto value = intx::be::store<evmc::bytes32>(stack.pop());
@@ -736,9 +736,7 @@ inline evmc_status_code sstore(StackTop stack, ExecutionState& state) noexcept
         cost += 20000;
         break;
     }
-    if ((state.gas_left -= cost) < 0)
-        return EVMC_OUT_OF_GAS;
-    return EVMC_SUCCESS;
+    return gas_left - cost;
 }
 
 /// Internal jump implementation for JUMP/JUMPI instructions.
