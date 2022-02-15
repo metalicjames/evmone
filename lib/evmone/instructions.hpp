@@ -504,25 +504,25 @@ inline int64_t extcodesize(StackTop stack, int64_t gas_left, ExecutionState& sta
     return gas_left;
 }
 
-inline evmc_status_code extcodecopy(StackTop stack, ExecutionState& state) noexcept
+inline int64_t extcodecopy(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept
 {
     const auto addr = intx::be::trunc<evmc::address>(stack.pop());
     const auto& mem_index = stack.pop();
     const auto& input_index = stack.pop();
     const auto& size = stack.pop();
 
-    if (state.gas_left = check_memory(state, state.gas_left, mem_index, size); state.gas_left < 0)
-        return EVMC_OUT_OF_GAS;
+    if (gas_left = check_memory(state, gas_left, mem_index, size); gas_left < 0)
+        return gas_left;
 
     const auto s = static_cast<size_t>(size);
     const auto copy_cost = num_words(s) * 3;
-    if ((state.gas_left -= copy_cost) < 0)
-        return EVMC_OUT_OF_GAS;
+    if ((gas_left -= copy_cost) < 0)
+        return gas_left;
 
     if (state.rev >= EVMC_BERLIN && state.host.access_account(addr) == EVMC_ACCESS_COLD)
     {
-        if ((state.gas_left -= instr::additional_cold_account_access_cost) < 0)
-            return EVMC_OUT_OF_GAS;
+        if ((gas_left -= instr::additional_cold_account_access_cost) < 0)
+            return gas_left;
     }
 
     if (s > 0)
@@ -535,7 +535,7 @@ inline evmc_status_code extcodecopy(StackTop stack, ExecutionState& state) noexc
             std::memset(&state.memory[dst + num_bytes_copied], 0, num_bytes_to_clear);
     }
 
-    return EVMC_SUCCESS;
+    return gas_left;
 }
 
 inline void returndatasize(StackTop stack, ExecutionState& state) noexcept
