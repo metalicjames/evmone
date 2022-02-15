@@ -638,39 +638,39 @@ inline void selfbalance(StackTop stack, ExecutionState& state) noexcept
     stack.push(intx::be::load<uint256>(state.host.get_balance(state.msg->recipient)));
 }
 
-inline evmc_status_code mload(StackTop stack, ExecutionState& state) noexcept
+inline int64_t mload(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept
 {
     auto& index = stack.top();
 
-    if (state.gas_left = check_memory(state, state.gas_left, index, 32); state.gas_left < 0)
-        return EVMC_OUT_OF_GAS;
+    if (gas_left = check_memory(state, gas_left, index, 32); gas_left < 0)
+        return gas_left;
 
     index = intx::be::unsafe::load<uint256>(&state.memory[static_cast<size_t>(index)]);
-    return EVMC_SUCCESS;
+    return gas_left;
 }
 
-inline evmc_status_code mstore(StackTop stack, ExecutionState& state) noexcept
+inline int64_t mstore(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept
 {
     const auto& index = stack.pop();
     const auto& value = stack.pop();
 
-    if (state.gas_left = check_memory(state, state.gas_left, index, 32); state.gas_left < 0)
-        return EVMC_OUT_OF_GAS;
+    if (gas_left = check_memory(state, gas_left, index, 32); gas_left < 0)
+        return gas_left;
 
     intx::be::unsafe::store(&state.memory[static_cast<size_t>(index)], value);
-    return EVMC_SUCCESS;
+    return gas_left;
 }
 
-inline evmc_status_code mstore8(StackTop stack, ExecutionState& state) noexcept
+inline int64_t mstore8(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept
 {
     const auto& index = stack.pop();
     const auto& value = stack.pop();
 
-    if (state.gas_left = check_memory(state, state.gas_left, index, 1); state.gas_left < 0)
-        return EVMC_OUT_OF_GAS;
+    if (gas_left = check_memory(state, gas_left, index, 1); gas_left < 0)
+        return gas_left;
 
     state.memory[static_cast<size_t>(index)] = static_cast<uint8_t>(value);
-    return EVMC_SUCCESS;
+    return gas_left;
 }
 
 inline evmc_status_code sload(StackTop stack, ExecutionState& state) noexcept
