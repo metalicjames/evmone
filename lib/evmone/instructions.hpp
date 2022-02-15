@@ -543,33 +543,33 @@ inline void returndatasize(StackTop stack, ExecutionState& state) noexcept
     stack.push(state.return_data.size());
 }
 
-inline evmc_status_code returndatacopy(StackTop stack, ExecutionState& state) noexcept
+inline int64_t returndatacopy(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept
 {
     const auto& mem_index = stack.pop();
     const auto& input_index = stack.pop();
     const auto& size = stack.pop();
 
-    if (state.gas_left = check_memory(state, state.gas_left, mem_index, size); state.gas_left < 0)
-        return EVMC_OUT_OF_GAS;
+    if (gas_left = check_memory(state, gas_left, mem_index, size); gas_left < 0)
+        return gas_left;
 
     auto dst = static_cast<size_t>(mem_index);
     auto s = static_cast<size_t>(size);
 
     if (state.return_data.size() < input_index)
-        return EVMC_INVALID_MEMORY_ACCESS;
+        return -1;  // FIXME: Will be reported as OOG.
     auto src = static_cast<size_t>(input_index);
 
     if (src + s > state.return_data.size())
-        return EVMC_INVALID_MEMORY_ACCESS;
+        return -1;  // FIXME: Will be reported as OOG.
 
     const auto copy_cost = num_words(s) * 3;
-    if ((state.gas_left -= copy_cost) < 0)
-        return EVMC_OUT_OF_GAS;
+    if ((gas_left -= copy_cost) < 0)
+        return gas_left;
 
     if (s > 0)
         std::memcpy(&state.memory[dst], &state.return_data[src], s);
 
-    return EVMC_SUCCESS;
+    return gas_left;
 }
 
 inline int64_t extcodehash(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept
