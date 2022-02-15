@@ -818,25 +818,25 @@ inline void swap(StackTop stack) noexcept
 }
 
 template <size_t NumTopics>
-inline evmc_status_code log(StackTop stack, ExecutionState& state) noexcept
+inline int64_t log(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept
 {
     static_assert(NumTopics <= 4);
 
     if (state.msg->flags & EVMC_STATIC)
-        return EVMC_STATIC_MODE_VIOLATION;
+        return -1;  // FIXME
 
     const auto& offset = stack.pop();
     const auto& size = stack.pop();
 
-    if (state.gas_left = check_memory(state, state.gas_left, offset, size); state.gas_left < 0)
-        return EVMC_OUT_OF_GAS;
+    if (gas_left = check_memory(state, gas_left, offset, size); gas_left < 0)
+        return gas_left;
 
     const auto o = static_cast<size_t>(offset);
     const auto s = static_cast<size_t>(size);
 
     const auto cost = int64_t(s) * 8;
-    if ((state.gas_left -= cost) < 0)
-        return EVMC_OUT_OF_GAS;
+    if ((gas_left -= cost) < 0)
+        return gas_left;
 
     std::array<evmc::bytes32, NumTopics> topics;  // NOLINT(cppcoreguidelines-pro-type-member-init)
     for (auto& topic : topics)
@@ -844,7 +844,7 @@ inline evmc_status_code log(StackTop stack, ExecutionState& state) noexcept
 
     const auto data = s != 0 ? &state.memory[o] : nullptr;
     state.host.emit_log(state.msg->recipient, data, s, topics.data(), NumTopics);
-    return EVMC_SUCCESS;
+    return gas_left;
 }
 
 

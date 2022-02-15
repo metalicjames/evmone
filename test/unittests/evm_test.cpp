@@ -891,7 +891,7 @@ TEST_P(evm, staticmode)
 
     rev = EVMC_CONSTANTINOPLE;
     // FIXME:
-    for (auto op : {/*OP_SSTORE,*/ OP_LOG0, OP_LOG1, OP_LOG2, OP_LOG3, OP_LOG4, OP_CALL, OP_CREATE,
+    for (auto op : {/*OP_SSTORE, OP_LOG0, OP_LOG1, OP_LOG2, OP_LOG3, OP_LOG4,*/ OP_CALL, OP_CREATE,
              OP_CREATE2, OP_SELFDESTRUCT})
     {
         msg.flags |= EVMC_STATIC;
