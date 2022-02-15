@@ -141,17 +141,17 @@ struct Position
     return nullptr;
 }
 
-[[release_inline]] inline code_iterator invoke(
-    evmc_status_code (*instr_fn)(StackTop, ExecutionState&) noexcept, Position pos,
-    ExecutionState& state) noexcept
-{
-    if (const auto status = instr_fn(pos.stack_top, state); status != EVMC_SUCCESS)
-    {
-        state.status = status;
-        return nullptr;
-    }
-    return pos.code_it + 1;
-}
+// [[release_inline]] inline code_iterator invoke(
+//     evmc_status_code (*instr_fn)(StackTop, ExecutionState&) noexcept, Position pos,
+//     ExecutionState& state) noexcept
+// {
+//     if (const auto status = instr_fn(pos.stack_top, state); status != EVMC_SUCCESS)
+//     {
+//         state.status = status;
+//         return nullptr;
+//     }
+//     return pos.code_it + 1;
+// }
 
 [[release_inline]] inline code_iterator invoke(
     int64_t (*instr_fn)(StackTop, int64_t, ExecutionState&) noexcept, Position pos,

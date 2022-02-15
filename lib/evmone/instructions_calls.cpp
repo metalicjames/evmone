@@ -7,7 +7,7 @@
 namespace evmone::instr::core
 {
 template <evmc_opcode Op>
-evmc_status_code call_impl(StackTop stack, ExecutionState& state) noexcept
+int64_t call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept
 {
     static_assert(
         Op == OP_CALL || Op == OP_CALLCODE || Op == OP_DELEGATECALL || Op == OP_STATICCALL);
@@ -25,18 +25,16 @@ evmc_status_code call_impl(StackTop stack, ExecutionState& state) noexcept
 
     if (state.rev >= EVMC_BERLIN && state.host.access_account(dst) == EVMC_ACCESS_COLD)
     {
-        if ((state.gas_left -= instr::additional_cold_account_access_cost) < 0)
-            return EVMC_OUT_OF_GAS;
+        if ((gas_left -= instr::additional_cold_account_access_cost) < 0)
+            return gas_left;
     }
 
-    if (state.gas_left = check_memory(state, state.gas_left, input_offset, input_size);
-        state.gas_left < 0)
-        return EVMC_OUT_OF_GAS;
+    if (gas_left = check_memory(state, gas_left, input_offset, input_size); gas_left < 0)
+        return gas_left;
 
 
-    if (state.gas_left = check_memory(state, state.gas_left, output_offset, output_size);
-        state.gas_left < 0)
-        return EVMC_OUT_OF_GAS;
+    if (gas_left = check_memory(state, gas_left, output_offset, output_size); gas_left < 0)
+        return gas_left;
 
     auto msg = evmc_message{};
     msg.kind = (Op == OP_DELEGATECALL) ? EVMC_DELEGATECALL :
@@ -61,37 +59,37 @@ evmc_status_code call_impl(StackTop stack, ExecutionState& state) noexcept
     if constexpr (Op == OP_CALL)
     {
         if (has_value && state.msg->flags & EVMC_STATIC)
-            return EVMC_STATIC_MODE_VIOLATION;
+            return -1;
 
         if ((has_value || state.rev < EVMC_SPURIOUS_DRAGON) && !state.host.account_exists(dst))
             cost += 25000;
     }
 
-    if ((state.gas_left -= cost) < 0)
-        return EVMC_OUT_OF_GAS;
+    if ((gas_left -= cost) < 0)
+        return gas_left;
 
     msg.gas = std::numeric_limits<int64_t>::max();
     if (gas < msg.gas)
         msg.gas = static_cast<int64_t>(gas);
 
     if (state.rev >= EVMC_TANGERINE_WHISTLE)  // TODO: Always true for STATICCALL.
-        msg.gas = std::min(msg.gas, state.gas_left - state.gas_left / 64);
-    else if (msg.gas > state.gas_left)
-        return EVMC_OUT_OF_GAS;
+        msg.gas = std::min(msg.gas, gas_left - gas_left / 64);
+    else if (msg.gas > gas_left)
+        return -1;
 
     if (has_value)
     {
         msg.gas += 2300;  // Add stipend.
-        state.gas_left += 2300;
+        gas_left += 2300;
     }
 
     state.return_data.clear();
 
     if (state.msg->depth >= 1024)
-        return EVMC_SUCCESS;
+        return gas_left;
 
     if (has_value && intx::be::load<uint256>(state.host.get_balance(state.msg->recipient)) < value)
-        return EVMC_SUCCESS;
+        return gas_left;
 
     const auto result = state.host.call(msg);
     state.return_data.assign(result.output_data, result.output_size);
@@ -101,54 +99,53 @@ evmc_status_code call_impl(StackTop stack, ExecutionState& state) noexcept
         std::memcpy(&state.memory[size_t(output_offset)], result.output_data, copy_size);
 
     const auto gas_used = msg.gas - result.gas_left;
-    state.gas_left -= gas_used;
-    return EVMC_SUCCESS;
+    gas_left -= gas_used;
+    return gas_left;
 }
 
-template evmc_status_code call_impl<OP_CALL>(StackTop stack, ExecutionState& state) noexcept;
-template evmc_status_code call_impl<OP_STATICCALL>(StackTop stack, ExecutionState& state) noexcept;
-template evmc_status_code call_impl<OP_DELEGATECALL>(
-    StackTop stack, ExecutionState& state) noexcept;
-template evmc_status_code call_impl<OP_CALLCODE>(StackTop stack, ExecutionState& state) noexcept;
+template int64_t call_impl<OP_CALL>(StackTop stack, int64_t, ExecutionState& state) noexcept;
+template int64_t call_impl<OP_STATICCALL>(StackTop stack, int64_t, ExecutionState& state) noexcept;
+template int64_t call_impl<OP_DELEGATECALL>(
+    StackTop stack, int64_t, ExecutionState& state) noexcept;
+template int64_t call_impl<OP_CALLCODE>(StackTop stack, int64_t, ExecutionState& state) noexcept;
 
 
 template <evmc_opcode Op>
-evmc_status_code create_impl(StackTop stack, ExecutionState& state) noexcept
+int64_t create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept
 {
     static_assert(Op == OP_CREATE || Op == OP_CREATE2);
 
     if (state.msg->flags & EVMC_STATIC)
-        return EVMC_STATIC_MODE_VIOLATION;
+        return -1;
 
     const auto endowment = stack.pop();
     const auto init_code_offset = stack.pop();
     const auto init_code_size = stack.pop();
 
-    if (state.gas_left = check_memory(state, state.gas_left, init_code_offset, init_code_size);
-        state.gas_left < 0)
-        return EVMC_OUT_OF_GAS;
+    if (gas_left = check_memory(state, gas_left, init_code_offset, init_code_size); gas_left < 0)
+        return gas_left;
 
     auto salt = uint256{};
     if constexpr (Op == OP_CREATE2)
     {
         salt = stack.pop();
         auto salt_cost = num_words(static_cast<size_t>(init_code_size)) * 6;
-        if ((state.gas_left -= salt_cost) < 0)
-            return EVMC_OUT_OF_GAS;
+        if ((gas_left -= salt_cost) < 0)
+            return gas_left;
     }
 
     stack.push(0);
     state.return_data.clear();
 
     if (state.msg->depth >= 1024)
-        return EVMC_SUCCESS;
+        return gas_left;
 
     if (endowment != 0 &&
         intx::be::load<uint256>(state.host.get_balance(state.msg->recipient)) < endowment)
-        return EVMC_SUCCESS;
+        return gas_left;
 
     auto msg = evmc_message{};
-    msg.gas = state.gas_left;
+    msg.gas = gas_left;
     if (state.rev >= EVMC_TANGERINE_WHISTLE)
         msg.gas = msg.gas - msg.gas / 64;
 
@@ -164,15 +161,15 @@ evmc_status_code create_impl(StackTop stack, ExecutionState& state) noexcept
     msg.value = intx::be::store<evmc::uint256be>(endowment);
 
     const auto result = state.host.call(msg);
-    state.gas_left -= msg.gas - result.gas_left;
+    gas_left -= msg.gas - result.gas_left;
 
     state.return_data.assign(result.output_data, result.output_size);
     if (result.status_code == EVMC_SUCCESS)
         stack.top() = intx::be::load<uint256>(result.create_address);
 
-    return EVMC_SUCCESS;
+    return gas_left;
 }
 
-template evmc_status_code create_impl<OP_CREATE>(StackTop stack, ExecutionState& state) noexcept;
-template evmc_status_code create_impl<OP_CREATE2>(StackTop stack, ExecutionState& state) noexcept;
+template int64_t create_impl<OP_CREATE>(StackTop stack, int64_t, ExecutionState& state) noexcept;
+template int64_t create_impl<OP_CREATE2>(StackTop stack, int64_t, ExecutionState& state) noexcept;
 }  // namespace evmone::instr::core
