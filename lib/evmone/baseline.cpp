@@ -59,6 +59,12 @@ CodeAnalysis analyze(bytes_view code)
 
 namespace
 {
+struct CheckResult
+{
+    evmc_status_code status;
+    int64_t gas_left;
+};
+
 /// Checks instruction requirements before execution.
 ///
 /// This checks:
@@ -73,8 +79,8 @@ namespace
 /// @return  Status code with information which check has failed
 ///          or EVMC_SUCCESS if everything is fine.
 template <evmc_opcode Op>
-inline evmc_status_code check_requirements(
-    const CostTable& cost_table, int64_t& gas_left, ptrdiff_t stack_size) noexcept
+inline CheckResult check_requirements(
+    const CostTable& cost_table, int64_t gas_left, ptrdiff_t stack_size) noexcept
 {
     static_assert(
         !(instr::has_const_gas_cost(Op) && instr::gas_costs[EVMC_FRONTIER][Op] == instr::undefined),
@@ -88,7 +94,7 @@ inline evmc_status_code check_requirements(
         // Negative cost marks an undefined instruction.
         // This check must be first to produce correct error code.
         if (INTX_UNLIKELY(gas_cost < 0))
-            return EVMC_UNDEFINED_INSTRUCTION;
+            return {EVMC_UNDEFINED_INSTRUCTION, gas_left};
     }
 
     // Check stack requirements first. This is order is not required,
@@ -97,18 +103,18 @@ inline evmc_status_code check_requirements(
     {
         static_assert(instr::traits[Op].stack_height_change == 1);
         if (INTX_UNLIKELY(stack_size == StackSpace::limit))
-            return EVMC_STACK_OVERFLOW;
+            return {EVMC_STACK_OVERFLOW, gas_left};
     }
     if constexpr (instr::traits[Op].stack_height_required > 0)
     {
         if (INTX_UNLIKELY(stack_size < instr::traits[Op].stack_height_required))
-            return EVMC_STACK_UNDERFLOW;
+            return {EVMC_STACK_UNDERFLOW, gas_left};
     }
 
     if (INTX_UNLIKELY((gas_left -= gas_cost) < 0))
-        return EVMC_OUT_OF_GAS;
+        return {EVMC_OUT_OF_GAS, gas_left};
 
-    return EVMC_SUCCESS;
+    return {EVMC_SUCCESS, gas_left};
 }
 
 
@@ -176,8 +182,9 @@ template <evmc_opcode Op>
     Position pos, ExecutionState& state) noexcept
 {
     const auto stack_size = pos.stack_top - stack_bottom;
-    if (const auto status = check_requirements<Op>(cost_table, state.gas_left, stack_size);
-        status != EVMC_SUCCESS)
+    const auto [status, g] = check_requirements<Op>(cost_table, state.gas_left, stack_size);
+    state.gas_left = g;
+    if (status != EVMC_SUCCESS)
     {
         state.status = status;
         return {nullptr, pos.stack_top};
