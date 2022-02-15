@@ -29,10 +29,13 @@ evmc_status_code call_impl(StackTop stack, ExecutionState& state) noexcept
             return EVMC_OUT_OF_GAS;
     }
 
-    if (!check_memory(state, input_offset, input_size))
+    if (state.gas_left = check_memory(state, state.gas_left, input_offset, input_size);
+        state.gas_left < 0)
         return EVMC_OUT_OF_GAS;
 
-    if (!check_memory(state, output_offset, output_size))
+
+    if (state.gas_left = check_memory(state, state.gas_left, output_offset, output_size);
+        state.gas_left < 0)
         return EVMC_OUT_OF_GAS;
 
     auto msg = evmc_message{};
@@ -121,7 +124,8 @@ evmc_status_code create_impl(StackTop stack, ExecutionState& state) noexcept
     const auto init_code_offset = stack.pop();
     const auto init_code_size = stack.pop();
 
-    if (!check_memory(state, init_code_offset, init_code_size))
+    if (state.gas_left = check_memory(state, state.gas_left, init_code_offset, init_code_size);
+        state.gas_left < 0)
         return EVMC_OUT_OF_GAS;
 
     auto salt = uint256{};
