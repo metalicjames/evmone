@@ -572,19 +572,19 @@ inline evmc_status_code returndatacopy(StackTop stack, ExecutionState& state) no
     return EVMC_SUCCESS;
 }
 
-inline evmc_status_code extcodehash(StackTop stack, ExecutionState& state) noexcept
+inline int64_t extcodehash(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept
 {
     auto& x = stack.top();
     const auto addr = intx::be::trunc<evmc::address>(x);
 
     if (state.rev >= EVMC_BERLIN && state.host.access_account(addr) == EVMC_ACCESS_COLD)
     {
-        if ((state.gas_left -= instr::additional_cold_account_access_cost) < 0)
-            return EVMC_OUT_OF_GAS;
+        if ((gas_left -= instr::additional_cold_account_access_cost) < 0)
+            return gas_left;
     }
 
     x = intx::be::load<uint256>(state.host.get_code_hash(addr));
-    return EVMC_SUCCESS;
+    return gas_left;
 }
 
 
