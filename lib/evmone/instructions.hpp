@@ -673,7 +673,7 @@ inline int64_t mstore8(StackTop stack, int64_t gas_left, ExecutionState& state) 
     return gas_left;
 }
 
-inline evmc_status_code sload(StackTop stack, ExecutionState& state) noexcept
+inline int64_t sload(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept
 {
     auto& x = stack.top();
     const auto key = intx::be::store<evmc::bytes32>(x);
@@ -685,13 +685,13 @@ inline evmc_status_code sload(StackTop stack, ExecutionState& state) noexcept
         // Here we need to apply additional cold storage access cost.
         constexpr auto additional_cold_sload_cost =
             instr::cold_sload_cost - instr::warm_storage_read_cost;
-        if ((state.gas_left -= additional_cold_sload_cost) < 0)
-            return EVMC_OUT_OF_GAS;
+        if ((gas_left -= additional_cold_sload_cost) < 0)
+            return gas_left;
     }
 
     x = intx::be::load<uint256>(state.host.get_storage(state.msg->recipient, key));
 
-    return EVMC_SUCCESS;
+    return gas_left;
 }
 
 inline evmc_status_code sstore(StackTop stack, ExecutionState& state) noexcept
