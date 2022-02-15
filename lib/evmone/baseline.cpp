@@ -127,15 +127,15 @@ struct Position
 
 /// Helpers for invoking instruction implementations of different signatures.
 /// @{
-[[release_inline]] inline code_iterator invoke(
-    void (*instr_fn)(StackTop) noexcept, Position pos, ExecutionState& /*state*/) noexcept
+[[release_inline]] inline code_iterator invoke(void (*instr_fn)(StackTop) noexcept, Position pos,
+    int64_t& /*gas_left*/, ExecutionState& /*state*/) noexcept
 {
     instr_fn(pos.stack_top);
     return pos.code_it + 1;
 }
 
-[[release_inline]] inline code_iterator invoke(
-    StopToken (*instr_fn)() noexcept, Position /*pos*/, ExecutionState& state) noexcept
+[[release_inline]] inline code_iterator invoke(StopToken (*instr_fn)() noexcept, Position /*pos*/,
+    int64_t& /*gas_left*/, ExecutionState& state) noexcept
 {
     state.status = instr_fn().status;
     return nullptr;
@@ -155,9 +155,9 @@ struct Position
 
 [[release_inline]] inline code_iterator invoke(
     int64_t (*instr_fn)(StackTop, int64_t, ExecutionState&) noexcept, Position pos,
-    ExecutionState& state) noexcept
+    int64_t& gas_left, ExecutionState& state) noexcept
 {
-    if (state.gas_left = instr_fn(pos.stack_top, state.gas_left, state); state.gas_left < 0)
+    if (gas_left = instr_fn(pos.stack_top, gas_left, state); gas_left < 0)
     {
         state.status = EVMC_OUT_OF_GAS;
         return nullptr;
@@ -166,7 +166,7 @@ struct Position
 }
 
 [[release_inline]] inline code_iterator invoke(void (*instr_fn)(StackTop, ExecutionState&) noexcept,
-    Position pos, ExecutionState& state) noexcept
+    Position pos, int64_t& /*gas_left*/, ExecutionState& state) noexcept
 {
     instr_fn(pos.stack_top, state);
     return pos.code_it + 1;
@@ -174,18 +174,18 @@ struct Position
 
 [[release_inline]] inline code_iterator invoke(
     code_iterator (*instr_fn)(StackTop, ExecutionState&, code_iterator) noexcept, Position pos,
-    ExecutionState& state) noexcept
+    int64_t& /*gas_left*/, ExecutionState& state) noexcept
 {
     return instr_fn(pos.stack_top, state, pos.code_it);
 }
 
 [[release_inline]] inline code_iterator invoke(
     StopToken (*instr_fn)(StackTop, int64_t, ExecutionState&) noexcept, Position pos,
-    ExecutionState& state) noexcept
+    int64_t& gas_left, ExecutionState& state) noexcept
 {
-    const auto [status, gas_left ] = instr_fn(pos.stack_top, state.gas_left, state);
+    const auto [status, g] = instr_fn(pos.stack_top, gas_left, state);
+    gas_left = g;
     state.status = status;
-    state.gas_left = gas_left;
     return nullptr;
 }
 /// @}
@@ -193,38 +193,38 @@ struct Position
 /// A helper to invoke the instruction implementation of the given opcode Op.
 template <evmc_opcode Op>
 [[release_inline]] inline Position invoke(const CostTable& cost_table, const uint256* stack_bottom,
-    Position pos, ExecutionState& state) noexcept
+    Position pos, int64_t& gas_left, ExecutionState& state) noexcept
 {
     const auto stack_size = pos.stack_top - stack_bottom;
-    const auto [status, g] = check_requirements<Op>(cost_table, state.gas_left, stack_size);
-    state.gas_left = g;
+    const auto [status, g] = check_requirements<Op>(cost_table, gas_left, stack_size);
+    gas_left = g;
     if (status != EVMC_SUCCESS)
     {
         state.status = status;
         return {nullptr, pos.stack_top};
     }
-    const auto new_pos = invoke(instr::core::impl<Op>, pos, state);
+    const auto new_pos = invoke(instr::core::impl<Op>, pos, gas_left, state);
     const auto new_stack_top = pos.stack_top + instr::traits[Op].stack_height_change;
     return {new_pos, new_stack_top};
 }
 
 
 /// Implementation of a generic instruction "case".
-#define DISPATCH_CASE(OPCODE)                                                            \
-    case OPCODE:                                                                         \
-        ASM_COMMENT(OPCODE);                                                             \
-                                                                                         \
-        if (const auto next = invoke<OPCODE>(cost_table, stack_bottom, position, state); \
-            next.code_it == nullptr)                                                     \
-        {                                                                                \
-            goto exit;                                                                   \
-        }                                                                                \
-        else                                                                             \
-        {                                                                                \
-            /* Update current position only when no error,                               \
-               this improves compiler optimization. */                                   \
-            position = next;                                                             \
-        }                                                                                \
+#define DISPATCH_CASE(OPCODE)                                                                 \
+    case OPCODE:                                                                              \
+        ASM_COMMENT(OPCODE);                                                                  \
+                                                                                              \
+        if (const auto next = invoke<OPCODE>(cost_table, stack_bottom, position, gas, state); \
+            next.code_it == nullptr)                                                          \
+        {                                                                                     \
+            goto exit;                                                                        \
+        }                                                                                     \
+        else                                                                                  \
+        {                                                                                     \
+            /* Update current position only when no error,                                    \
+               this improves compiler optimization. */                                        \
+            position = next;                                                                  \
+        }                                                                                     \
         break
 
 template <bool TracingEnabled>
@@ -246,6 +246,8 @@ evmc_result execute(const VM& vm, ExecutionState& state, const CodeAnalysis& ana
 
     // Code iterator and stack top pointer for interpreter loop.
     Position position{code, stack_bottom};
+
+    auto gas = state.gas_left;
 
     while (true)  // Guaranteed to terminate because padded code ends with STOP.
     {
@@ -271,7 +273,7 @@ evmc_result execute(const VM& vm, ExecutionState& state, const CodeAnalysis& ana
 
 exit:
     const auto gas_left =
-        (state.status == EVMC_SUCCESS || state.status == EVMC_REVERT) ? state.gas_left : 0;
+        (state.status == EVMC_SUCCESS || state.status == EVMC_REVERT) ? gas : 0;
 
     assert(state.output_size != 0 || state.output_offset == 0);
     const auto result = evmc::make_result(state.status, gas_left,
