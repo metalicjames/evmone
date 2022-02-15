@@ -180,10 +180,12 @@ struct Position
 }
 
 [[release_inline]] inline code_iterator invoke(
-    StopToken (*instr_fn)(StackTop, ExecutionState&) noexcept, Position pos,
+    StopToken (*instr_fn)(StackTop, int64_t, ExecutionState&) noexcept, Position pos,
     ExecutionState& state) noexcept
 {
-    state.status = instr_fn(pos.stack_top, state).status;
+    const auto [status, gas_left ] = instr_fn(pos.stack_top, state.gas_left, state);
+    state.status = status;
+    state.gas_left = gas_left;
     return nullptr;
 }
 /// @}

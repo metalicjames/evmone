@@ -52,11 +52,14 @@ inline StopToken impl(AdvancedExecutionState& /*state*/) noexcept
     return CoreFn();
 }
 
-template <evmc_opcode Op, StopToken CoreFn(StackTop, ExecutionState&) noexcept = core::impl<Op>>
+template <evmc_opcode Op,
+    StopToken CoreFn(StackTop, int64_t, ExecutionState&) noexcept = core::impl<Op>>
 inline StopToken impl(AdvancedExecutionState& state) noexcept
 {
     // Stack height adjustment may be omitted.
-    return CoreFn(state.stack.top_item, state);
+    const auto token = CoreFn(state.stack.top_item, state.gas_left, state);
+    state.gas_left = token.gas_left;
+    return token;
 }
 
 template <evmc_opcode Op,
