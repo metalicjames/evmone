@@ -133,8 +133,9 @@ struct Position
 
 /// A helper to invoke the instruction implementation of the given opcode Op.
 template <evmc_opcode Op>
-[[release_inline]] inline Position invoke(const CostTable& cost_table, const uint256* stack_bottom,
-    Position pos, ExecutionState& state) noexcept
+[[release_inline]] inline code_iterator invoke(const CostTable& cost_table,
+    const uint256* stack_bottom, uint256*& stack_top, code_iterator code_it,
+    ExecutionState& state) noexcept
 {
     static_assert(
         !(instr::has_const_gas_cost(Op) && instr::gas_costs[EVMC_FRONTIER][Op] == instr::undefined),
@@ -150,17 +151,17 @@ template <evmc_opcode Op>
         if (INTX_UNLIKELY(gas_cost < 0))
         {
             state.status = EVMC_UNDEFINED_INSTRUCTION;
-            return {nullptr, pos.stack_top};
+            return nullptr;
         }
     }
 
     if (INTX_UNLIKELY((state.gas_left -= gas_cost) < 0))
     {
         state.status = EVMC_OUT_OF_GAS;
-        return {nullptr, pos.stack_top};
+        return nullptr;
     }
 
-    const auto stack_size = pos.stack_top - stack_bottom;
+    const auto stack_size = stack_top - stack_bottom;
     // Check stack requirements first. This is order is not required,
     // but it is nicer because complete gas check may need to inspect operands.
     if constexpr (instr::traits[Op].stack_height_change > 0)
@@ -169,7 +170,7 @@ template <evmc_opcode Op>
         if (INTX_UNLIKELY(stack_size == Stack::limit))
         {
             state.status = EVMC_STACK_OVERFLOW;
-            return {nullptr, pos.stack_top};
+            return nullptr;
         }
     }
     if constexpr (instr::traits[Op].stack_height_required > 0)
@@ -177,32 +178,33 @@ template <evmc_opcode Op>
         if (INTX_UNLIKELY(stack_size < instr::traits[Op].stack_height_required))
         {
             state.status = EVMC_STACK_UNDERFLOW;
-            return {nullptr, pos.stack_top};
+            return nullptr;
         }
     }
 
-    const auto new_pos = invoke(instr::core::impl<Op>, pos, state);
-    const auto new_stack_top = pos.stack_top + instr::traits[Op].stack_height_change;
-    return {new_pos, new_stack_top};
+    const auto new_pos = invoke(instr::core::impl<Op>, {code_it, stack_top}, state);
+    stack_top += instr::traits[Op].stack_height_change;
+    return new_pos;
 }
 
 
 /// Implementation of a generic instruction "case".
-#define DISPATCH_CASE(OPCODE)                                                            \
-    case OPCODE:                                                                         \
-        ASM_COMMENT(OPCODE);                                                             \
-                                                                                         \
-        if (const auto next = invoke<OPCODE>(cost_table, stack_bottom, position, state); \
-            next.code_it == nullptr)                                                     \
-        {                                                                                \
-            goto exit;                                                                   \
-        }                                                                                \
-        else                                                                             \
-        {                                                                                \
-            /* Update current position only when no error,                               \
-               this improves compiler optimization. */                                   \
-            position = next;                                                             \
-        }                                                                                \
+#define DISPATCH_CASE(OPCODE)                                                           \
+    case OPCODE:                                                                        \
+        ASM_COMMENT(OPCODE);                                                            \
+                                                                                        \
+        if (const auto next = invoke<OPCODE>(                                           \
+                cost_table, stack_bottom, position.stack_top, position.code_it, state); \
+            next == nullptr)                                                            \
+        {                                                                               \
+            goto exit;                                                                  \
+        }                                                                               \
+        else                                                                            \
+        {                                                                               \
+            /* Update current position only when no error,                              \
+               this improves compiler optimization. */                                  \
+            position.code_it = next;                                                    \
+        }                                                                               \
         break
 
 template <bool TracingEnabled>
