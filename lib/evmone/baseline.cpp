@@ -154,6 +154,12 @@ template <evmc_opcode Op>
         }
     }
 
+    if (INTX_UNLIKELY((state.gas_left -= gas_cost) < 0))
+    {
+        state.status = EVMC_OUT_OF_GAS;
+        return {nullptr, pos.stack_top};
+    }
+
     const auto stack_size = pos.stack_top - stack_bottom;
     // Check stack requirements first. This is order is not required,
     // but it is nicer because complete gas check may need to inspect operands.
@@ -173,12 +179,6 @@ template <evmc_opcode Op>
             state.status = EVMC_STACK_UNDERFLOW;
             return {nullptr, pos.stack_top};
         }
-    }
-
-    if (INTX_UNLIKELY((state.gas_left -= gas_cost) < 0))
-    {
-        state.status = EVMC_OUT_OF_GAS;
-        return {nullptr, pos.stack_top};
     }
 
     const auto new_pos = invoke(instr::core::impl<Op>, pos, state);
