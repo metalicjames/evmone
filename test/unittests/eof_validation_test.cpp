@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include <evmone/eof.hpp>
+#include <evmone/instructions_traits.hpp>
 #include <gtest/gtest.h>
 #include <test/utils/utils.hpp>
 
@@ -10,10 +11,15 @@ using namespace evmone;
 
 namespace
 {
+inline EOFValidationErrror validate_eof(bytes_view code, evmc_revision rev = EVMC_SHANGHAI) noexcept
+{
+    return ::validate_eof(rev, code);
+}
+
 inline EOFValidationErrror validate_eof(
     std::string_view code_hex, evmc_revision rev = EVMC_SHANGHAI) noexcept
 {
-    return ::validate_eof(rev, from_hex(code_hex));
+    return validate_eof(from_hex(code_hex), rev);
 }
 }  // namespace
 
@@ -157,4 +163,78 @@ TEST(eof_validation, EOF1_trailing_bytes)
         EOFValidationErrror::invalid_section_bodies_size);
     EXPECT_EQ(validate_eof("EF0001 010001 020002 00 FE AABB DEADBEEF"),
         EOFValidationErrror::invalid_section_bodies_size);
+}
+
+TEST(eof_validation, EOF1_undefined_opcodes)
+{
+    auto code = from_hex("EF0001 010002 00 0000");
+
+    const auto& gas_table = evmone::instr::gas_costs[EVMC_SHANGHAI];
+
+    for (uint16_t opcode = 0; opcode <= 0xff; ++opcode)
+    {
+        // PUSH* require immediate argument to be valid, checked in a separate test
+        if (opcode >= OP_PUSH1 && opcode <= OP_PUSH32)
+            continue;
+
+        code[code.size() - 2] = static_cast<uint8_t>(opcode);
+
+        const auto expected = (gas_table[opcode] == evmone::instr::undefined ?
+                                   EOFValidationErrror::undefined_instruction :
+                                   EOFValidationErrror::success);
+        EXPECT_EQ(validate_eof(code), expected) << hex(code);
+    }
+
+    EXPECT_EQ(validate_eof(from_hex("EF0001 010001 00 FE")), EOFValidationErrror::success);
+}
+
+TEST(eof_validation, EOF1_truncated_push)
+{
+    auto eof_header = from_hex("EF0001 010001 00");
+    auto& code_size_byte = eof_header[5];
+    for (uint8_t opcode = OP_PUSH1; opcode <= OP_PUSH32; ++opcode)
+    {
+        const auto required_bytes = static_cast<size_t>(opcode) - OP_PUSH1 + 1;
+        for (size_t i = 0; i < required_bytes; ++i)
+        {
+            const bytes code{opcode + bytes(i, 0)};
+            code_size_byte = static_cast<uint8_t>(code.size());
+            const auto container = eof_header + code;
+
+            EXPECT_EQ(validate_eof(container), EOFValidationErrror::missing_terminating_instruction)
+                << hex(container);
+        }
+
+        const bytes code{opcode + bytes(required_bytes, 0) + uint8_t{OP_STOP}};
+        code_size_byte = static_cast<uint8_t>(code.size());
+        const auto container = eof_header + code;
+
+        EXPECT_EQ(validate_eof(container), EOFValidationErrror::success) << hex(container);
+    }
+}
+
+TEST(eof_validation, EOF1_terminating_instructions)
+{
+    auto eof_header = from_hex("EF0001 010001 00");
+    auto& code_size_byte = eof_header[5];
+
+    const auto& traits = evmone::instr::traits;
+
+    for (uint16_t opcode = 0; opcode <= 0xff; ++opcode)
+    {
+        const auto& op_traits = traits[opcode];
+        // Skip undefined opcodes.
+        if (op_traits.name == nullptr)
+            continue;
+
+        bytes code{static_cast<uint8_t>(opcode) + bytes(op_traits.immediate_size, 0)};
+        code_size_byte = static_cast<uint8_t>(code.size());
+        const auto container = eof_header + code;
+
+        const auto expected = ((opcode == OP_STOP || opcode == OP_RETURN || opcode == OP_REVERT ||
+                                   opcode == OP_INVALID || opcode == OP_SELFDESTRUCT) ?
+                                   EOFValidationErrror::success :
+                                   EOFValidationErrror::missing_terminating_instruction);
+        EXPECT_EQ(validate_eof(container), expected) << hex(code);
+    }
 }
