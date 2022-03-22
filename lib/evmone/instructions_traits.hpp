@@ -78,7 +78,7 @@ constexpr inline GasCostTable gas_costs = []() noexcept {
     table[EVMC_FRONTIER][OP_COINBASE] = 2;
     table[EVMC_FRONTIER][OP_TIMESTAMP] = 2;
     table[EVMC_FRONTIER][OP_NUMBER] = 2;
-    table[EVMC_FRONTIER][OP_DIFFICULTY] = 2;
+    table[EVMC_FRONTIER][OP_PREVRANDAO] = 2;
     table[EVMC_FRONTIER][OP_GASLIMIT] = 2;
     table[EVMC_FRONTIER][OP_POP] = 2;
     table[EVMC_FRONTIER][OP_MLOAD] = 3;
@@ -164,6 +164,8 @@ constexpr inline GasCostTable gas_costs = []() noexcept {
     table[EVMC_SHANGHAI][OP_PUSH0] = 2;
 
     table[EVMC_CANCUN] = table[EVMC_SHANGHAI];
+    table[EVMC_CANCUN][OP_RJUMP] = 5;
+    table[EVMC_CANCUN][OP_RJUMPI] = 7;
 
     return table;
 }();
@@ -271,7 +273,7 @@ constexpr inline std::array<Traits, 256> traits = []() noexcept {
     table[OP_COINBASE] = {"COINBASE", 0, 1, 0, false, EVMC_FRONTIER};
     table[OP_TIMESTAMP] = {"TIMESTAMP", 0, 1, 0, false, EVMC_FRONTIER};
     table[OP_NUMBER] = {"NUMBER", 0, 1, 0, false, EVMC_FRONTIER};
-    table[OP_DIFFICULTY] = {"DIFFICULTY", 0, 1, 0, false, EVMC_FRONTIER};
+    table[OP_PREVRANDAO] = {"PREVRANDAO", 0, 1, 0, false, EVMC_FRONTIER};
     table[OP_GASLIMIT] = {"GASLIMIT", 0, 1, 0, false, EVMC_FRONTIER};
     table[OP_CHAINID] = {"CHAINID", 0, 1, 0, false, EVMC_ISTANBUL};
     table[OP_SELFBALANCE] = {"SELFBALANCE", 0, 1, 0, false, EVMC_ISTANBUL};
@@ -289,6 +291,8 @@ constexpr inline std::array<Traits, 256> traits = []() noexcept {
     table[OP_MSIZE] = {"MSIZE", 0, 1, 0, false, EVMC_FRONTIER};
     table[OP_GAS] = {"GAS", 0, 1, 0, false, EVMC_FRONTIER};
     table[OP_JUMPDEST] = {"JUMPDEST", 0, 0, 0, false, EVMC_FRONTIER};
+    table[OP_RJUMP] = {"RJUMP", 0, 0, 2, false, EVMC_CANCUN};
+    table[OP_RJUMPI] = {"RJUMPI", 1, -1, 2, false, EVMC_CANCUN};
 
     table[OP_PUSH0] = {"PUSH0", 0, 1, 0, false, EVMC_SHANGHAI};
 
