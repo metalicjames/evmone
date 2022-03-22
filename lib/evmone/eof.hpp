@@ -46,6 +46,8 @@ enum class EOFValidationErrror
     zero_section_size,
     section_headers_not_terminated,
     invalid_section_bodies_size,
+    undefined_instruction,
+    missing_terminating_instruction,
 
     impossible,
 };
