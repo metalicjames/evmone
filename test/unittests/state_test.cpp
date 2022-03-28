@@ -104,6 +104,8 @@ static void run_state_test(const json::json& j)
     block.number = from_json<int64_t>(env["currentNumber"]);
     block.timestamp = from_json<int64_t>(env["currentTimestamp"]);
 
+    const auto access_lists_it = tr.find("accessLists");
+
     for (const auto& [rev_name, posts] : _t["post"].items())
     {
         SCOPED_TRACE(rev_name);
@@ -113,9 +115,21 @@ static void run_state_test(const json::json& j)
         {
             const auto expected_state_hash = from_json<hash256>(post["hash"]);
             const auto& indexes = post["indexes"];
-            tx.data = from_json<bytes>(tr["data"][indexes["data"].get<size_t>()]);
+            const auto data_index = indexes["data"].get<size_t>();
+            tx.data = from_json<bytes>(tr["data"][data_index]);
             tx.gas_limit = from_json<int64_t>(tr["gasLimit"][indexes["gas"].get<size_t>()]);
             tx.value = from_json<intx::uint256>(tr["value"][indexes["value"].get<size_t>()]);
+
+            if (access_lists_it != tr.end())
+            {
+                for (const auto& [_2, a] : access_lists_it.value()[data_index].items())
+                {
+                    tx.access_list.push_back({from_json<evmc::address>(a["address"]), {}});
+                    auto& storage_access_list = tx.access_list.back().second;
+                    for (const auto& [_3, storage_key] : a["storageKeys"].items())
+                        storage_access_list.push_back(from_json<bytes32>(storage_key));
+                }
+            }
 
             auto state = pre_state;
             state::transition(state, block, tx, rev, vm);
