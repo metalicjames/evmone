@@ -28,6 +28,8 @@ namespace evmone
 using u256 =  boost::multiprecision::number<boost::multiprecision::cpp_int_backend<256, 256, boost::multiprecision::unsigned_magnitude, boost::multiprecision::unchecked, void>>;
 using bigint = boost::multiprecision::number<boost::multiprecision::cpp_int_backend<>>;
 
+using bytes = bytevec;
+
 /// Converts a templated integer value to the big-endian byte-stream represented on a templated collection.
 /// The size of the collection object will be unchanged. If it is too small, it will not represent the
 /// value properly, if too big then the additional elements will be zeroed out.

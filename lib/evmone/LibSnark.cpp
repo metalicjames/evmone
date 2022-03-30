@@ -17,6 +17,8 @@ using namespace evmone;
 namespace
 {
 
+using bytes = bytevec;
+
 void initLibSnark() noexcept
 {
 	static bool s_initialized = []() noexcept
